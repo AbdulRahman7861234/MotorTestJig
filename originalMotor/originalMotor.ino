@@ -4,7 +4,7 @@
 #define ONETHOUSAND_SIX_HUNDRED 77000
 #define EIGHT_HUNDRED 680000
 #define THREE_HUNDRED 425000
-#define Return 1000000000
+#define Base (THREE_HUNDRED + EIGHT_HUNDRED + ONETHOUSAND_SIX_HUNDRED)
 bool runLoop = false; // Initialize the flag to false 
 
 typedef enum MOTOR_STATES {
@@ -137,6 +137,7 @@ void loop() {
         if (platform.motor_hall_effect == 0) {
           if (platform.motor_hall_effect_debounce++ > 2) {
             platform.location = MOTOR_STOP;
+            
           }
         } else {
           platform.motor_hall_effect_debounce = 0;
@@ -180,41 +181,32 @@ void loop() {
 
   // Inside the loop controlled by runLoop
   while (runLoop == true) {
+    platform.location = TRAVELLING;
     stepper.setMaxAcceleration(100);
     stepper.setMaxDeceleration(100);
     stepper.setMaxVelocity(3000);
 
     if (platform.direction == FORWARD) {
-      stepper.moveSteps(ONETHOUSAND_SIX_HUNDRED);
+      Serial.println("Going forward now");
+      stepper.moveSteps(Base);
+      
+      delay(45000);
+     // stepper.moveSteps(-Base);
+      Serial.println("Return");
+      platform.direction = REVERSE;
     } else if (platform.direction == REVERSE) {
-
+      Serial.println("Going backwards now");
       stepper.moveSteps(-ONETHOUSAND_SIX_HUNDRED);
+      
       Serial.println("1600");
-      delay(15000);
+      delay(45000);
       stepper.moveSteps(-EIGHT_HUNDRED);
       Serial.println("800");
-      delay(15000);
+      delay(45000);
       stepper.moveSteps(-THREE_HUNDRED);
       Serial.println("300");
-      delay(15000);
-      if (platform.direction == REVERSE) {
-        stepper.setRPM(-30);
-        stepper.moveSteps(Return);
-        Serial.println("Return");
-        if (platform.motor_hall_effect == 0) {
-          if (platform.motor_hall_effect_debounce++ > 2) {
-            platform.location = MOTOR_STOP;
-          }
-        }
-      }
-      stepper.setRPM(-30);
-      stepper.moveSteps(Return);
-      Serial.println("Return");
-
-      //platform.direction = FORWARD;
-      //platform.location = UNKNOWN;
-
-
+      delay(45000);
+      platform.direction = FORWARD;
     }
 
     // Check for the '2' command to exit the loop
@@ -224,32 +216,12 @@ void loop() {
         runLoop = false; // Exit the loop
         platform.direction = FORWARD;
         platform.location = UNKNOWN;
+        break; // Add this line to exit the loop immediately
       }
     }
-  }
-
- 
-      //if (cmd == '0') {
-        //platform.direction = FORWARD;
-        //platform.location = UNKNOWN;
-      //} else if (cmd == '1') {
-        //while (power == true)
-        //stepper.setMaxAcceleration(300);
-        //stepper.setMaxDeceleration(300);
-        //stepper.setMaxVelocity(3000);
-        //if (platform.direction == FORWARD) {  //It should ignore this
-          //stepper.moveSteps(ONETHOUSAND_SIX_HUNDRED);
-        //} else if (platform.direction == REVERSE) {// SHOULD BE COMING TOWARDS THE MOTOR
-          //stepper.moveSteps(-ONETHOUSAND_SIX_HUNDRED);
-          //delay(15000);
-          //stepper.moveSteps(-EIGHT_HUNDRED);
-          //delay(15000);
-          //stepper.moveSteps(-THREE_HUNDRED);
-        //}
- 
-        //platform.location = TRAVELLING;
-        //platform.steps_to_move = 200;
-      //}
+}       
+        
+      
     }
     break;
     case MOTOR_STOP:
