@@ -1,11 +1,20 @@
+//**********************************************************************
+// Includes
+
 #include <UstepperS32.h>
+
+//**********************************************************************
+// Defines
 
 #define TEN_MM_IN_STEPS 77000 //100MM
 #define ONETHOUSAND_SIX_HUNDRED 77000
 #define EIGHT_HUNDRED 680000
 #define THREE_HUNDRED 425000
 #define Base (THREE_HUNDRED + EIGHT_HUNDRED + ONETHOUSAND_SIX_HUNDRED)
-bool runLoop = false; // Initialize the flag to false 
+
+
+//**********************************************************************
+// Typedefs
 
 typedef enum MOTOR_STATES {
   OFF,
@@ -45,7 +54,12 @@ Platform_t platform = {
   .last_location = TRAVELED,
   .direction = FORWARD
 };
- 
+
+//**********************************************************************
+// Variables
+
+int Test = 0;
+bool runLoop = false; // Initialize the flag to false 
 static uint32_t platform_state_loops;
  
 MOTOR_STATES motor_state = OFF;
@@ -53,9 +67,14 @@ MOTOR_STATES last_motor_state = OFF;
 bool new_motor_state = true;
 static uint32_t motor_state_loops;
 UstepperS32 stepper;
+
+//**********************************************************************
+// Prototypes
  
-void motor_service(void);
-uint16_t read_pin(uint32_t pin);
+uint16_t read_pin(uint32_t pin, uint16_t* debouce_timer);
+
+//**********************************************************************
+// Setup
  
 void setup() {
   stepper.setup();
@@ -64,6 +83,8 @@ void setup() {
 
   Serial.print("platform.direction: ");
   Serial.println(platform.direction);
+
+  Serial.print(Test);
  
   stepper.setMaxAcceleration(10);
   stepper.setMaxDeceleration(10);
@@ -75,29 +96,17 @@ void setup() {
   pinMode(D2, INPUT_PULLDOWN);
   pinMode(D9, INPUT_PULLDOWN);
 }
+
+//**********************************************************************
+// Main
  
 void loop() {
-  // put your main code here, to run repeatedly:
-  //Serial.println("loop");
- 
-  static uint32_t _last_motor, _last_end;
-  _last_motor = platform.motor_hall_effect;
-  _last_end = platform.end_hall_effect;
-  platform.motor_hall_effect = read_pin(D9);
-  platform.end_hall_effect = read_pin(D2);
- 
-  if (_last_motor != platform.motor_hall_effect) {
-        Serial.println("Motor Sensor");
-        //platform.location = MOTOR_STOP;
-        //stepper.stop();
-       
-  }
- 
-  if (_last_end != platform.end_hall_effect) {
-        Serial.println("End Sensor");
-        //platform.location = END_STOP;
-        //stepper.stop();
-  }
+  static uint32_t driveSteps;
+
+  //Serial.print(Test);
+
+  platform.motor_hall_effect = read_pin(D9, &platform.motor_hall_effect_debounce);
+  platform.end_hall_effect = read_pin(D2, &platform.end_hall_effect_debounce);
  
   bool _new_state = false;
  
@@ -115,14 +124,7 @@ void loop() {
           platform.location = TRAVELLING;
           platform.direction = FORWARD;
           stepper.setRPM(30);                  
-          }
-        //if(platform.end_hall_effect == 1){
-          //platform.location = TRAVELLING;
-          //platform.direction = REVERSE;
-          //stepper.setRPM(-30);                    Change this to change direction when you first start program
-
-        //}
-         else {
+        } else {
           platform.location = MOTOR_STOP;
         }
       }
@@ -135,95 +137,98 @@ void loop() {
  
       if (platform.direction == FORWARD) {
         if (platform.motor_hall_effect == 0) {
-          if (platform.motor_hall_effect_debounce++ > 2) {
-            platform.location = MOTOR_STOP;
-            
-          }
-        } else {
-          platform.motor_hall_effect_debounce = 0;
-        }
+          platform.location = MOTOR_STOP;
+        } 
       } else if (platform.direction == REVERSE) {
         if (platform.end_hall_effect == 0) {
-          if (platform.end_hall_effect_debounce++ > 2) {
             platform.location = END_STOP;
-          }
-        } else {
-          platform.end_hall_effect_debounce = 0;
         }
       }
- 
+
       if (!stepper.getMotorState()) {
         platform.location = TRAVELED;
+        
       }
     break;
  
     case TRAVELED:
+{
+  if (_new_state)
+  {
+    Serial.println("TRAVELED");
+    platform_state_loops = 0;
+    stepper.stop();
+    Test += 1;
+    if (Test > 4)
     {
-      if (_new_state) {
-        Serial.println("TRAVELED");
-        platform_state_loops = 0;
-        stepper.stop();
-      }
- 
-      char cmd = Serial.read();
+      Test = 1; // Reset to 1 if it goes beyond 4
+    }
+  }
 
-      if (cmd == '2') {
+  char cmd = Serial.read();
+
+  if (cmd == '2')
+  {
     runLoop = false; // Exit the loop
     platform.direction = FORWARD;
     platform.location = UNKNOWN;
   }
 
-  if (cmd == '1') {
-    runLoop = true; // Enter the loop
-    platform.direction = REVERSE;
-    //platform.location = TRAVELLING;
+  if (cmd == '1')
+  {
+    runLoop = true; // Start the loop
+    Test = 1;
   }
 
-  // Inside the loop controlled by runLoop
-  while (runLoop == true) {
-    platform.location = TRAVELLING;
-    stepper.setMaxAcceleration(100);
-    stepper.setMaxDeceleration(100);
-    stepper.setMaxVelocity(3000);
-
-    if (platform.direction == FORWARD) {
-      Serial.println("Going forward now");
-      stepper.moveSteps(Base);
-      
-      delay(45000);
-     // stepper.moveSteps(-Base);
-      Serial.println("Return");
+  if (runLoop)
+  {
+    Serial.print("Test: ");
+    Serial.println(Test); // Print the current Test value
+    if (Test == 1)
+    {
       platform.direction = REVERSE;
-    } else if (platform.direction == REVERSE) {
-      Serial.println("Going backwards now");
+      platform.location = TRAVELLING;
+      stepper.setMaxAcceleration(100);
+      stepper.setMaxDeceleration(100);
+      stepper.setMaxVelocity(3000);
       stepper.moveSteps(-ONETHOUSAND_SIX_HUNDRED);
-      
-      Serial.println("1600");
-      delay(45000);
+    }
+    else if (Test == 2)
+    {
+      platform.direction = REVERSE;
+      platform.location = TRAVELLING;
+      stepper.setMaxAcceleration(100);
+      stepper.setMaxDeceleration(100);
+      stepper.setMaxVelocity(3000);
       stepper.moveSteps(-EIGHT_HUNDRED);
-      Serial.println("800");
-      delay(45000);
+    }
+    else if (Test == 3)
+    {
+      platform.direction = REVERSE;
+      platform.location = TRAVELLING;
+      stepper.setMaxAcceleration(100);
+      stepper.setMaxDeceleration(100);
+      stepper.setMaxVelocity(3000);
       stepper.moveSteps(-THREE_HUNDRED);
-      Serial.println("300");
-      delay(45000);
+    }
+    else if (Test == 4)
+    {
       platform.direction = FORWARD;
+      platform.location = TRAVELLING;
+      stepper.setMaxAcceleration(100);
+      stepper.setMaxDeceleration(100);
+      stepper.setMaxVelocity(3000);
+      stepper.moveSteps(Base);
     }
 
-    // Check for the '2' command to exit the loop
-    if (Serial.available()) {
-      char nextCmd = Serial.read();
-      if (nextCmd == '2') {
-        runLoop = false; // Exit the loop
-        platform.direction = FORWARD;
-        platform.location = UNKNOWN;
-        break; // Add this line to exit the loop immediately
-      }
+    if (Test > 4)
+    {
+      Test = 1; // Reset to 1 if it goes beyond 4
     }
-}       
-        
-      
-    }
-    break;
+  }
+}
+break;
+
     case MOTOR_STOP:
       if (_new_state) {
         Serial.println("MOTOR_STOP position");
@@ -251,84 +256,23 @@ void loop() {
     break;
   }
 
-  //motor_service();
-
   delay(10);
 }
 
-void motor_service(void) {
-  if (motor_state != last_motor_state) {
-    new_motor_state = true;
-    last_motor_state = motor_state;
-    Serial.println("Changing state");
-  }
+//**********************************************************************
+// Function
 
-  switch (motor_state) {
-    case OFF:
-    {
-      while(!Serial.available());
-      char cmd = Serial.read();
-
-      if(cmd == '1')                      //Run continous clockwise
-      {
-        motor_state = RAMPING_UP;
-      }
-    }
-      break;
-
-    case RAMPING_UP:
-      if (new_motor_state) {
-        stepper.setRPM(100);
-        stepper.moveSteps(50000);
-        motor_state_loops = 0;
-      }
-
-      if (motor_state_loops++ == 1)
-        motor_state = MOVING;
-
-      break;
-
-    case MOVING:
-    {
-      uint16_t _motor_hall_effect = read_pin(D9);
-      uint16_t _end_hall_effect = read_pin(D2);
-
-      if (_motor_hall_effect == 0) {
-        motor_state = RAMPING_DOWN;
-      }
-
-      if (_end_hall_effect == 0) {
-        motor_state = RAMPING_DOWN;
-      }
-    }
-      break;
-
-    case RAMPING_DOWN:
-      if (new_motor_state) {
-        stepper.stop();
-        motor_state_loops = 0;
-      }
-
-      if (motor_state_loops++ == 1) {
-        motor_state = OFF;
-      }
-
-      break;
-
-    case MOVING_REVERSE:
-
-      break;
-  }
-
-  new_motor_state = false;
-}
-
-uint16_t read_pin(uint32_t pin) {
-  char str[20] = {0};
-  //pinMode(pin, INPUT_PULLUP);
+uint16_t read_pin(uint32_t pin, uint16_t* debounce_timer) {
   uint16_t _val = digitalRead(pin);
-  //sprintf(str, "Pin: %d = %d", pin, _val);
-  //Serial.println(str);
+  if (_val == 0) {
+    *debounce_timer += 1;
 
-  return _val;
+    if (*debounce_timer > 2) {
+      return 0;
+    }
+  } else {
+    *debounce_timer = 0;
+  }
+
+  return 1;
 }
